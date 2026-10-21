@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ParcelGuard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: flat sidebar + one column. Order of reading: headline figure and curve, four indicators,
+   what needs action, carriers, latest claims. Ink is the interface colour; green appears only where money comes in.
+   Mobile: the sidebar becomes a bottom tab bar. */
+:root {
+  --bg: #FAFAFB;
+  --surface: #FFFFFF;
+  --surface-2: #F4F5F7;
+  --line: #E6E8EC;
+  --line-strong: #CDD1D8;
+  --fg: #0F1115;
+  --muted: #646A76;
+  --faint: #8E94A0;
+  --on-ink: #FFFFFF;
+  --accent: #0C7C5C;
+  --accent-soft: #E7F4EE;
+  --good: #12805C;
+  --warn: #B26A00;
+  --bad: #C0352B;
+  --overlay: rgba(15, 17, 21, .4);
+  --font-ui: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A0B0D; --surface: #101215; --surface-2: #16181C; --line: #1F2227; --line-strong: #31353C;
+    --fg: #EDEEF0; --muted: #8F95A1; --faint: #6A707C; --on-ink: #0A0B0D;
+    --accent: #3FCF9F; --accent-soft: #0F2620; --good: #3FCF9F; --warn: #E5A64A; --bad: #F27D73; --overlay: rgba(0, 0, 0, .62);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A0B0D; --surface: #101215; --surface-2: #16181C; --line: #1F2227; --line-strong: #31353C;
+  --fg: #EDEEF0; --muted: #8F95A1; --faint: #6A707C; --on-ink: #0A0B0D;
+  --accent: #3FCF9F; --accent-soft: #0F2620; --good: #3FCF9F; --warn: #E5A64A; --bad: #F27D73; --overlay: rgba(0, 0, 0, .62);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  padding-block: 24px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p, ol, dl, dd { margin: 0; padding: 0; }
+button, input, select { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; border-radius: 4px; }
+.muted { color: var(--muted); }
+.sub { display: block; color: var(--muted); font-size: 13px; }
+.tab-num { font-variant-numeric: tabular-nums; }
+.trk { font-family: var(--font-mono); font-size: 13px; font-weight: 500; letter-spacing: .01em; }
+
+/* Shell */
+.app { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 48px; }
+.side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; min-height: calc(100vh - 56px); display: flex; flex-direction: column; gap: 20px; }
+.brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; letter-spacing: -.01em; }
+.brand svg { width: 24px; height: 24px; flex: none; }
+.icon-btn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; color: var(--muted); }
+.icon-btn:hover { color: var(--fg); background: var(--surface-2); }
+.icon-btn svg { width: 16px; height: 16px; }
+.ws { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.ws-av { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--fg); color: var(--on-ink); font-size: 12px; font-weight: 600; flex: none; }
+.ws b { display: block; font-weight: 500; line-height: 1.2; }
+.ws small { color: var(--muted); font-size: 12.5px; }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav a { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--muted); font-weight: 500; }
+.nav a:hover { color: var(--fg); background: var(--surface-2); }
+.nav a[aria-current="page"] { color: var(--fg); background: var(--surface-2); }
+.nav svg { width: 16px; height: 16px; flex: none; }
+.nav .lbl-short { display: none; }
+.badge { margin-left: auto; min-width: 20px; padding: 0 6px; height: 20px; display: inline-grid; place-items: center; border-radius: 999px; background: var(--fg); color: var(--on-ink); font-size: 12px; font-weight: 500; }
+.side-foot { margin-top: auto; color: var(--muted); font-size: 12.5px; line-height: 1.5; padding: 0 10px; }
+
+.main { min-width: 0; display: grid; gap: 24px; align-content: start; }
+.stack { display: grid; gap: 12px; min-width: 0; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
+.page-head h1 { font-size: 22px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; text-wrap: balance; }
+.meta { margin-top: 4px; color: var(--muted); font-size: 13px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.card-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 14px 20px; }
+.card-h h2 { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.card-h .link { color: var(--muted); font-size: 13px; }
+.card-h .link:hover { color: var(--fg); }
+.count-pill { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 500; }
+.link { background: none; border: 0; padding: 0; cursor: pointer; }
+.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Controls */
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.seg button { padding: 5px 12px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 13px; font-weight: 500; cursor: pointer; }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--fg); }
+.tabs { display: flex; gap: 22px; overflow-x: auto; border-bottom: 1px solid var(--line); min-width: 0; }
+.tab { padding: 8px 0 10px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--fg); }
+.tab[aria-pressed="true"] { color: var(--fg); border-bottom-color: var(--fg); }
+.tab .count { margin-left: 6px; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.field { position: relative; }
+.field svg { position: absolute; left: 11px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.input, .select { height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0 12px; min-width: 0; }
+.field .input { padding-left: 33px; width: 280px; max-width: 100%; }
+.input::placeholder { color: var(--faint); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-weight: 500; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn svg { width: 15px; height: 15px; }
+.btn.primary { background: var(--fg); border-color: var(--fg); color: var(--on-ink); }
+.btn.primary:hover { opacity: .88; background: var(--fg); }
+.btn.sm { height: 28px; padding: 0 10px; font-size: 13px; }
+
+/* Status: a dot and a word, nothing heavier */
+.st { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 13px; }
+.st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.st.good::before { background: var(--good); }
+.st.warn::before { background: var(--warn); }
+.st.bad::before { background: var(--bad); }
+.tag { padding: 1px 8px; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 500; }
+
+/* Overview: headline figure + curve */
+.hero { display: grid; grid-template-columns: 290px minmax(0, 1fr); }
+.hero-l { padding: 22px 24px; display: flex; flex-direction: column; gap: 8px; border-right: 1px solid var(--line); }
+.hero-l .label { color: var(--muted); font-size: 13px; }
+.hero-l .value { font-size: 56px; font-weight: 500; letter-spacing: -.045em; line-height: 1.05; }
+.hero-l .text { color: var(--muted); max-width: 30ch; margin-top: auto; padding-top: 16px; }
+.hero-l .text b { color: var(--fg); font-weight: 500; }
+.hero-r { min-width: 0; display: flex; flex-direction: column; padding-bottom: 14px; }
+.chart-area { height: 236px; padding: 0 20px; }
+.chart { height: 100%; display: flex; flex-direction: column; }
+.plot { position: relative; flex: 1; margin: 10px 8px 0 48px; touch-action: pan-y; cursor: crosshair; }
+.gl { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--line); }
+.gl.zero { border-top-color: var(--line-strong); }
+.gl span { position: absolute; left: -48px; top: -8px; width: 40px; text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 16px; }
+.sv { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.sv .area { fill: var(--accent); fill-opacity: .1; stroke: none; }
+.sv .line { fill: none; stroke: var(--accent); stroke-width: 2px; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-sizing: content-box; transform: translate(-50%, -50%); pointer-events: none; }
+.hv { position: absolute; top: 0; bottom: 0; width: 0; pointer-events: none; }
+.hv .vl { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: var(--line-strong); }
+.hv .hd { position: absolute; left: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-sizing: content-box; transform: translate(-50%, -50%); }
+.tip { position: absolute; top: -4px; z-index: 2; display: grid; gap: 1px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); font-size: 12.5px; white-space: nowrap; pointer-events: none; transform: translateX(14px); }
+.tip.r { transform: translateX(calc(-100% - 14px)); }
+.tip[hidden], .hv[hidden] { display: none; }
+.tip b { font-size: 14px; font-weight: 600; }
+.tip span { color: var(--muted); }
+.xl { display: flex; justify-content: space-between; margin: 8px 8px 0 48px; color: var(--muted); font-size: 12px; }
+.ch-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px 8px; }
+.ch-h h2 { font-size: 14px; font-weight: 500; }
+.ch-h .link { color: var(--muted); font-size: 13px; }
+.ch-h .link:hover { color: var(--fg); }
+.dtable { height: 100%; overflow: auto; }
+.dtable table { min-width: 0; }
+.dtable th, .dtable td { padding: 8px 4px; }
+.dtable td:not(:first-child), .dtable th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Indicators: four cells sharing one frame */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.cell { background: var(--surface); padding: 16px 20px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+.cell .label { color: var(--muted); font-size: 13px; }
+.cell .value { font-size: 26px; font-weight: 500; letter-spacing: -.03em; line-height: 1.25; }
+.cell .hint { color: var(--muted); font-size: 12.5px; }
+
+.split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+
+/* Lists */
+.list { overflow: hidden; }
+.claims { --cols: minmax(0, 1.6fr) minmax(0, 1.1fr) 92px 120px 64px; }
+.ships { --cols: minmax(0, 1.6fr) minmax(0, 1.1fr) 72px 180px; }
+.row { display: grid; grid-template-columns: var(--cols); gap: 16px; align-items: center; width: 100%; padding: 11px 20px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; min-width: 0; }
+.row > * { min-width: 0; }
+.row.head { padding-block: 9px; color: var(--muted); font-size: 12px; background: var(--surface-2); }
+.card > .row.head:first-child { border-top: 0; }
+button.row { cursor: pointer; }
+button.row:hover { background: var(--surface-2); }
+.c-amt { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+.c-date { text-align: right; color: var(--muted); font-size: 13px; }
+.row.head .c-amt, .row.head .c-date { font-weight: 400; }
+.c-main .trk { display: block; overflow-wrap: anywhere; }
+.list-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.empty { padding: 36px 20px; text-align: center; display: grid; gap: 12px; justify-items: center; color: var(--muted); border-top: 1px solid var(--line); }
+.empty-sm { padding: 24px 20px 28px; color: var(--muted); border-top: 1px solid var(--line); }
+.count-line { color: var(--muted); font-size: 13px; }
+
+.todo-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 20px; border-top: 1px solid var(--line); }
+.todo-main { display: block; min-width: 0; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; }
+.todo-main:hover .trk { text-decoration: underline; text-underline-offset: 3px; }
+.todo-more { padding: 10px 20px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+
+.t-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 84px 76px; gap: 12px; align-items: center; padding: 11px 20px; border-top: 1px solid var(--line); }
+.t-row.head { padding-block: 9px; color: var(--muted); font-size: 12px; background: var(--surface-2); }
+.t-row > span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { display: block; height: 3px; margin-top: 7px; border-radius: 2px; background: var(--surface-2); }
+.bar i { display: block; height: 100%; border-radius: 2px; background: var(--fg); opacity: .8; }
+
+/* Stores */
+.stores { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.store { padding: 18px 20px; display: grid; gap: 14px; align-content: start; }
+.store h3 { font-size: 15px; font-weight: 500; }
+.store .url { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.store .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.stats3 b { display: block; font-size: 17px; font-weight: 500; letter-spacing: -.02em; }
+.stats3 span { color: var(--muted); font-size: 12.5px; }
+.form { padding: 18px 20px; display: grid; gap: 14px; }
+.form h2 { font-size: 14px; font-weight: 500; }
+.form-grid { display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.form label { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
+.form .select, .form .input { width: 100%; }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; min-width: 620px; border-collapse: collapse; }
+th, td { padding: 11px 20px; text-align: left; border-top: 1px solid var(--line); vertical-align: top; }
+th { border-top: 0; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 400; }
+.dtable th { background: none; }
+
+/* Drawer & toast */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--overlay); }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 41; width: min(480px, 100%); overflow-y: auto; background: var(--surface); border-left: 1px solid var(--line);
+  padding: calc(20px + env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) 24px; }
+.drawer-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.eyebrow { color: var(--muted); font-size: 12.5px; }
+.trk-lg { font-family: var(--font-mono); font-size: 17px; font-weight: 500; overflow-wrap: anywhere; margin-top: 2px; }
+.drawer-b { display: grid; gap: 24px; margin-top: 18px; }
+.d-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.d-reason { font-size: 16px; font-weight: 500; letter-spacing: -.01em; }
+.kv { display: grid; gap: 10px; }
+.kv > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 12px; }
+.kv dt { color: var(--muted); font-size: 13px; }
+.money { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.money > div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; font-variant-numeric: tabular-nums; }
+.money > div + div { border-top: 1px solid var(--line); }
+.money .total { background: var(--surface-2); font-weight: 600; }
+.money small { display: block; color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.drawer h3 { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 12px; }
+.tl { list-style: none; display: grid; }
+.tl li { position: relative; padding: 0 0 16px 24px; }
+.tl li::before { content: ""; position: absolute; left: 4px; top: 7px; bottom: -7px; width: 1px; background: var(--line-strong); }
+.tl li:last-child { padding-bottom: 0; }
+.tl li:last-child::before { display: none; }
+.tl li::after { content: ""; position: absolute; left: 0; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--surface); border: 2px solid var(--faint); }
+.tl li.now::after { background: var(--fg); border-color: var(--fg); }
+.tl li.future::after { border-style: dashed; }
+.tl .tt { font-weight: 500; }
+.tl .when { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.d-actions { display: grid; gap: 10px; }
+.d-actions .note { color: var(--muted); font-size: 13px; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 60; transform: translate(-50%, 12px); max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 10px; background: var(--fg); color: var(--on-ink); font-size: 13.5px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+@media (max-width: 1000px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .hero-l { border-right: 0; border-bottom: 1px solid var(--line); }
+  .split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+  .app { display: block; }
+  .side { display: contents; }
+  .brand-row { margin-bottom: 20px; }
+  .ws, .side-foot { display: none; }
+  .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; flex-direction: row; gap: 0; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+  .nav a { flex: 1; flex-direction: column; gap: 3px; padding: 6px 4px; font-size: 11.5px; text-align: center; position: relative; }
+  .nav a[aria-current="page"] { background: none; }
+  .nav .lbl-long { display: none; }
+  .nav .lbl-short { display: inline; }
+  .nav .badge { position: absolute; top: 0; left: 50%; margin: 0 0 0 6px; min-width: 18px; height: 18px; font-size: 11px; }
+  .main { padding-bottom: 84px; }
+  .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 760px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .page-head h1 { font-size: 20px; }
+  .hero-l { padding: 18px 16px; }
+  .hero-l .value { font-size: 48px; }
+  .chart-area { padding: 0 12px; }
+  .ch-h { padding-inline: 16px; }
+  .cell { padding: 14px 16px; }
+  .cell .value { font-size: 22px; }
+  .row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 16px; }
+  .row.head, .c-who { display: none; }
+  .claims .row { grid-template-areas: "main amt" "st date"; }
+  .ships .row { grid-template-areas: "main main" "st date"; }
+  .row .c-main { grid-area: main; }
+  .row .c-amt { grid-area: amt; }
+  .row .c-st { grid-area: st; }
+  .row .c-date { grid-area: date; }
+  .todo-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main amt" "main btn"; gap: 6px 12px; }
+  .todo-main { grid-area: main; }
+  .todo-row .c-amt { grid-area: amt; }
+  .todo-row .btn { grid-area: btn; justify-self: end; }
+  .card-h { padding-inline: 16px; }
+  .todo-row, .todo-more, .list-foot, .empty, .empty-sm { padding-left: 16px; padding-right: 16px; }
+  .t-row { grid-template-columns: minmax(0, 1fr) 56px 64px 64px; gap: 8px; padding-inline: 16px; }
+  .field, .field .input { width: 100%; }
+  .toolbar > * { flex: 1 1 100%; }
+  .kv > div { grid-template-columns: 1fr; gap: 2px; }
+  th, td { padding: 10px 14px; }
+}
+</style>
+
+<style>
+:root { color-scheme: light; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+.brand-btns { display: inline-flex; gap: 6px; }
+.icon-btn.sm { width: 26px; height: 26px; border-radius: 6px; }
+.icon-btn.sm svg { width: 14px; height: 14px; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn[disabled] { opacity: .6; cursor: default; }
+.loading { padding: 64px 0; text-align: center; color: var(--muted); }
+.main.busy { opacity: .55; transition: opacity .15s; pointer-events: none; }
+.onboard { padding: 28px; display: grid; gap: 14px; justify-items: start; }
+.onboard h2 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.err-card { padding: 20px; display: grid; gap: 12px; justify-items: start; }
+.err-card h2 { font-size: 15px; font-weight: 600; }
+.idline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.idline code { font-family: var(--font-mono); color: var(--fg); overflow-wrap: anywhere; user-select: all; }
+.form-err { color: var(--bad); font-size: 13px; min-height: 1.3em; }
+.auth { min-height: calc(100vh - 56px); display: grid; place-items: center; }
+.auth-card { width: min(400px, 100%); padding: 28px; display: grid; gap: 14px; }
+.auth-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+.auth-brand svg { width: 24px; height: 24px; }
+.auth-card h1 { font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
+.auth-card form { display: grid; gap: 14px; }
+.auth-card label { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
+.auth-card .input { width: 100%; }
+.btn.wide { width: 100%; }
+.auth-alt { font-size: 13px; color: var(--muted); }
+.auth-alt .link { color: var(--fg); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+</style>
+</head><body>
+<div id="app"></div>
+<div class="scrim" id="scrim" data-action="close-drawer" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden></aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- Helpers ---------- */
+  const $ = (id) => document.getElementById(id);
+  const DAY = 86400000;
+  const E0 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  const E2 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const D = (s) => (s ? new Date(s) : null);
+  const fmtDay = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const fmtDT = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const ymdDate = (s) => new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  const plural = (n, w) => n + ' ' + w + (n > 1 && !/[sx]$/.test(w) ? 's' : '');
+  const rel = (d) => {
+    if (!d) return 'Jamais';
+    const m = Math.round((Date.now() - d.getTime()) / 60000);
+    if (m < 1) return 'À l’instant';
+    if (m < 60) return 'il y a ' + m + ' min';
+    if (m < 1440) return 'il y a ' + Math.round(m / 60) + ' h';
+    return 'il y a ' + Math.round(m / 1440) + ' j';
+  };
+
+  const CARRIERS = { colissimo: 'Colissimo', mondial_relay: 'Mondial Relay', chronopost: 'Chronopost', dpd: 'DPD' };
+  const TYPE = { delay: 'Retard', loss: 'Perte', damage: 'Avarie' };
+  const CLAIM_ST = { pending: ['warn', 'À envoyer'], submitted: ['', 'Envoyée'], approved: ['good', 'Remboursée'], rejected: ['bad', 'Refusée'] };
+  const SHIP_ST = { in_transit: ['', 'En transit'], delivered: ['good', 'Livré'], late: ['warn', 'Livré en retard'], lost: ['bad', 'Perdu'], damaged: ['bad', 'Endommagé'] };
+  const st = (map, k) => '<span class="st ' + map[k][0] + '">' + map[k][1] + '</span>';
+  const isDemo = (s) => /\.demo$/.test(s.url);
+
+  const ICONS = {
+    dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+    claims: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/>',
+    package: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+    store: '<path d="M4 9 5.5 4h13L20 9"/><path d="M4 9v11h16V9"/><path d="M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0A2.7 2.7 0 0 0 20 9"/><path d="M10 20v-5h4v5"/>',
+    moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'
+  };
+  const icon = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[n] + '</svg>';
+  const logo = () => '<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 2.5 4.5 6.3v7.2c0 5.6 3.9 10.1 9.5 12 5.6-1.9 9.5-6.4 9.5-12V6.3z" fill="var(--fg)"/><path d="m9.5 13.8 3.3 3.3 6-6.2" fill="none" stroke="var(--bg)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  async function api(path, opt) {
+    opt = opt || {};
+    const res = await fetch(path, {
+      method: opt.method || 'GET',
+      headers: opt.body ? { 'content-type': 'application/json' } : undefined,
+      body: opt.body ? JSON.stringify(opt.body) : undefined,
+      credentials: 'same-origin'
+    });
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* réponse vide */ }
+    if (!res.ok) {
+      const err = new Error((data && data.error && data.error.message) || 'Une erreur est survenue. Réessayez dans un instant.');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  /* ---------- State ---------- */
+  const PERIODS = { 30: { label: 'les 30 derniers jours', short: '30 jours' }, 90: { label: 'les 90 derniers jours', short: '90 jours' }, 180: { label: 'les 6 derniers mois', short: '6 mois' } };
+  const VIEWS = ['dashboard', 'claims', 'shipments', 'stores'];
+  function readHash() { try { const h = (location.hash || '').replace('#', ''); return VIEWS.indexOf(h) >= 0 ? h : 'dashboard'; } catch (e) { return 'dashboard'; } }
+
+  const fresh = () => ({
+    stores: null, pendingCount: 0, dash: null, todo: null, recent: null,
+    claims: null, claimFilter: 'all', claimQuery: '',
+    ships: null, shipFilter: 'all', shipCarrier: 'all', shipQuery: '',
+    storeForm: false, storeError: '', error: null, busy: false, chartTable: false, drawer: null
+  });
+  const state = Object.assign({ view: readHash(), period: 30, user: null, booted: false, authMode: 'login', authError: '', authBusy: false }, fresh());
+  let chart = null, seq = 0, lastFocus = null, toastTimer = null, searchTimer = null;
+
+  const isDark = () => { const t = document.documentElement.getAttribute('data-theme'); return t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches; };
+
+  /* ---------- Loading ---------- */
+  const claimQs = (page) => '/api/claims?status=' + state.claimFilter + '&q=' + encodeURIComponent(state.claimQuery) + '&page=' + page + '&perPage=30';
+  const shipQs = (page) => '/api/shipments?status=' + state.shipFilter + (state.shipCarrier !== 'all' ? '&carrier=' + state.shipCarrier : '') + '&q=' + encodeURIComponent(state.shipQuery) + '&page=' + page + '&perPage=25';
+
+  async function loadView() {
+    const my = ++seq;
+    state.busy = true; state.error = null; render();
+    try {
+      if (state.view === 'dashboard') {
+        const r = await Promise.all([api('/api/dashboard?days=' + state.period), api('/api/claims?status=todo&perPage=5'), api('/api/claims?perPage=6'), api('/api/stores')]);
+        if (my !== seq) return;
+        state.dash = r[0]; state.todo = r[1]; state.recent = r[2]; state.stores = r[3].items; state.pendingCount = r[2].counts.pending;
+      } else if (state.view === 'claims') {
+        const r = await Promise.all([api(claimQs(1)), api('/api/stores')]);
+        if (my !== seq) return;
+        state.claims = { items: r[0].items, total: r[0].total, counts: r[0].counts, page: 1 }; state.stores = r[1].items; state.pendingCount = r[0].counts.pending;
+      } else if (state.view === 'shipments') {
+        const r = await Promise.all([api(shipQs(1)), api('/api/claims?perPage=1'), api('/api/stores')]);
+        if (my !== seq) return;
+        state.ships = { items: r[0].items, total: r[0].total, counts: r[0].counts, page: 1 }; state.pendingCount = r[1].counts.pending; state.stores = r[2].items;
+      } else {
+        const r = await Promise.all([api('/api/stores'), api('/api/claims?perPage=1')]);
+        if (my !== seq) return;
+        state.stores = r[0].items; state.pendingCount = r[1].counts.pending;
+      }
+      state.busy = false;
+    } catch (e) {
+      if (my !== seq) return;
+      if (e.status === 401) { state.user = null; Object.assign(state, fresh()); render(); return; }
+      state.busy = false; state.error = e.message;
+    }
+    render();
+  }
+
+  async function refreshClaimList() {
+    const my = ++seq;
+    try {
+      const r = await api(claimQs(1));
+      if (my !== seq) return;
+      state.claims = { items: r.items, total: r.total, counts: r.counts, page: 1 };
+      if ($('claimList')) $('claimList').innerHTML = claimListHtml();
+    } catch (e) { toast(e.message); }
+  }
+  async function refreshShipList() {
+    const my = ++seq;
+    try {
+      const r = await api(shipQs(1));
+      if (my !== seq) return;
+      state.ships = { items: r.items, total: r.total, counts: r.counts, page: 1 };
+      if ($('shipList')) $('shipList').innerHTML = shipListHtml();
+    } catch (e) { toast(e.message); }
+  }
+  async function loadMore(kind) {
+    const box = kind === 'claims' ? state.claims : state.ships;
+    try {
+      const r = await api(kind === 'claims' ? claimQs(box.page + 1) : shipQs(box.page + 1));
+      box.items = box.items.concat(r.items); box.page += 1; box.total = r.total;
+      $(kind === 'claims' ? 'claimList' : 'shipList').innerHTML = kind === 'claims' ? claimListHtml() : shipListHtml();
+    } catch (e) { toast(e.message); }
+  }
+
+  /* ---------- Shell ---------- */
+  function navItem(v, long, short, ic, badge) {
+    return '<a href="#' + v + '"' + (state.view === v ? ' aria-current="page"' : '') + '>' + icon(ic) +
+      '<span class="lbl-long">' + long + '</span><span class="lbl-short">' + short + '</span>' + (badge ? '<span class="badge" aria-label="' + badge + ' à envoyer">' + badge + '</span>' : '') + '</a>';
+  }
+  function initials(n) { return esc((n || '?').split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('')); }
+
+  function shell() {
+    const n = state.stores ? state.stores.length : 0;
+    return '<div class="app"><aside class="side">' +
+      '<div class="brand-row"><a class="brand" href="#dashboard">' + logo() + '<span>ParcelGuard</span></a><span class="brand-btns">' +
+      '<button type="button" class="icon-btn" data-action="toggle-theme" aria-label="Changer de thème">' + icon(isDark() ? 'sun' : 'moon') + '</button>' +
+      '<button type="button" class="icon-btn" data-action="logout" aria-label="Se déconnecter">' + icon('out') + '</button></span></div>' +
+      '<div class="ws"><span class="ws-av" aria-hidden="true">' + initials(state.user.name) + '</span><span><b>' + esc(state.user.name) + '</b><small>' + (state.stores ? plural(n, 'boutique') : '&nbsp;') + '</small></span></div>' +
+      '<nav class="nav" aria-label="Navigation principale">' +
+      navItem('dashboard', 'Vue d’ensemble', 'Accueil', 'dashboard') +
+      navItem('claims', 'Réclamations', 'Réclamations', 'claims', state.pendingCount || '') +
+      navItem('shipments', 'Colis', 'Colis', 'package') +
+      navItem('stores', 'Boutiques', 'Boutiques', 'store') + '</nav>' +
+      '<p class="side-foot">Aucun abonnement. Commission de 25 % sur les sommes remboursées.</p>' +
+      '</aside><main class="main' + (state.busy ? ' busy' : '') + '" id="main">' + viewHtml() + '</main></div>';
+  }
+
+  function viewHtml() {
+    if (state.error) return head('') + '<div class="card err-card"><h2>Chargement impossible</h2><p class="muted">' + esc(state.error) + '</p><button type="button" class="btn" data-action="retry">Réessayer</button></div>';
+    if (state.view === 'claims') return state.claims ? claimsView() : loadingHtml();
+    if (state.view === 'shipments') return state.ships ? shipmentsView() : loadingHtml();
+    if (state.view === 'stores') return state.stores ? storesView() : loadingHtml();
+    return state.dash ? dashboardView() : loadingHtml();
+  }
+  const loadingHtml = () => '<div class="loading">Chargement…</div>';
+  function head(title, extra) {
+    const demo = state.stores && state.stores.some(isDemo);
+    return '<header class="page-head"><div>' + (title ? '<h1>' + title + '</h1>' : '') + '<p class="meta">Toutes les boutiques' + (demo ? ' · Données d’exemple' : '') + '</p></div>' + (extra || '') + '</header>';
+  }
+
+  /* ---------- Overview ---------- */
+  function niceTop(maxV) {
+    const steps = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
+    const step = steps.find((s) => maxV / s <= 4) || 10000;
+    const top = Math.max(step, Math.ceil(maxV / step) * step);
+    return { top: top, step: step, n: top / step };
+  }
+
+  function onboardingHtml() {
+    return head('Vue d’ensemble') + '<section class="card onboard"><h2>Connectez votre première boutique</h2>' +
+      '<p class="muted" style="max-width:60ch">ParcelGuard surveille vos colis, repère les retards, pertes et avaries, puis réclame l’argent qui vous est dû. Vous ne payez que 25 % des sommes remboursées.</p>' +
+      '<div class="btns"><a class="btn primary" href="#stores">' + icon('plus') + 'Connecter une boutique</a>' +
+      '<button type="button" class="btn" data-action="demo-load"' + (state.demoBusy ? ' disabled' : '') + '>' + (state.demoBusy ? 'Préparation…' : 'Essayer avec des données d’exemple') + '</button></div></section>';
+  }
+
+  function chartHtml(d) {
+    const pts = d.dailyCumulative, days = pts.length, cum = pts.map((p) => p.cumulative);
+    const nt = niceTop(cum[days - 1]);
+    chart = { cum: cum, dates: pts.map((p) => p.date), top: nt.top };
+    const gross = cum[days - 1];
+
+    if (state.chartTable) {
+      const rows = [];
+      for (let a = 0; a < days; a += 7) {
+        const b = Math.min(days - 1, a + 6);
+        const prev = a === 0 ? 0 : cum[a - 1];
+        rows.push('<tr><td>' + fmtDay(ymdDate(chart.dates[a])) + ' – ' + fmtDay(ymdDate(chart.dates[b])) + '</td><td>' + E2.format(cum[b] - prev) + '</td><td>' + E2.format(cum[b]) + '</td></tr>');
+      }
+      return '<div class="chart-area"><div class="dtable"><table><thead><tr><th>Semaine</th><th>Remboursé</th><th>Cumul</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div></div>';
+    }
+    let grid = '';
+    for (let i = 0; i <= nt.n; i++) grid += '<div class="gl' + (i === 0 ? ' zero' : '') + '" style="bottom:' + (i / nt.n * 100) + '%"><span>' + E0.format(i * nt.step) + '</span></div>';
+    const xy = cum.map((v, i) => (days > 1 ? (i / (days - 1) * 100) : 100).toFixed(2) + ',' + (100 - v / nt.top * 100).toFixed(2));
+    const line = 'M' + xy.join(' L');
+    const yEnd = 100 - gross / nt.top * 100;
+    return '<div class="chart-area"><div class="chart" role="img" aria-label="Cumul des remboursements : ' + E0.format(gross) + ' sur ' + PERIODS[state.period].label + '"><div class="plot" id="plot">' + grid +
+      '<svg class="sv" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="area" d="' + line + ' L100,100 L0,100 Z"/><path class="line" d="' + line + '"/></svg>' +
+      '<div class="dot" style="left:100%;top:' + yEnd + '%"></div>' +
+      '<div class="hv" id="hv" hidden><div class="vl"></div><div class="hd"></div></div><div class="tip" id="tip" hidden></div></div>' +
+      '<div class="xl"><span>' + fmtDay(ymdDate(chart.dates[0])) + '</span><span>' + fmtDay(ymdDate(chart.dates[Math.floor((days - 1) / 2)])) + '</span><span>Aujourd’hui</span></div></div></div>';
+  }
+
+  function todoCard() {
+    const items = state.todo.items, total = state.todo.total, toSend = state.dash.toSend.count;
+    const rows = items.map((c) => {
+      const isP = c.status === 'pending';
+      return '<div class="todo-row"><button type="button" class="todo-main" data-action="open-claim" data-id="' + c.id + '"><span class="trk">' + esc(c.shipment.trackingNumber) + '</span><span class="sub">' + CARRIERS[c.shipment.carrier] + ' · ' + (isP ? 'Prête à envoyer' : 'Refusée le ' + fmtDay(D(c.resolvedAt))) + '</span></button>' +
+        '<span class="c-amt">' + E2.format(c.amount) + '</span><button type="button" class="btn sm" data-action="' + (isP ? 'send-claim' : 'contest') + '" data-id="' + c.id + '">' + (isP ? 'Envoyer' : 'Contester') + '</button></div>';
+    }).join('');
+    const more = total > items.length ? '<div class="todo-more"><a class="link muted" href="#claims">' + (total - items.length > 1 ? 'Voir les ' + (total - items.length) + ' autres' : 'Voir 1 autre') + '</a></div>' : '';
+    return '<section class="card"><div class="card-h"><h2>À traiter' + (total ? '<span class="count-pill">' + total + '</span>' : '') + '</h2>' +
+      (toSend > 1 ? '<button type="button" class="btn sm" data-action="send-all">Tout envoyer</button>' : '') + '</div>' +
+      (total ? rows + more : '<div class="empty-sm">Rien à traiter. ParcelGuard surveille vos colis en continu.</div>') + '</section>';
+  }
+
+  function carriersCard(d) {
+    const maxN = Math.max.apply(null, d.byCarrier.map((x) => x.incidents).concat([1]));
+    return '<section class="card"><div class="card-h"><h2>Transporteurs</h2><span class="muted">' + PERIODS[state.period].label.replace('les ', '') + '</span></div>' +
+      '<div class="t-row head"><span>Transporteur</span><span>Anomalies</span><span>Acceptées</span><span>Obtenus</span></div>' +
+      d.byCarrier.map((x) => '<div class="t-row"><span>' + CARRIERS[x.carrier] + '<span class="bar"><i style="width:' + (x.incidents / maxN * 100) + '%"></i></span></span><span>' + x.incidents + '</span><span>' + (x.acceptanceRate == null ? '—' : Math.round(x.acceptanceRate * 100) + ' %') + '</span><span>' + E0.format(x.approvedAmount) + '</span></div>').join('') + '</section>';
+  }
+
+  function dashboardView() {
+    if (state.stores && state.stores.length === 0) return onboardingHtml();
+    const d = state.dash, t = d.totals, P = PERIODS[state.period];
+    const seg = '<div class="seg" role="group" aria-label="Période">' + Object.keys(PERIODS).map((k) =>
+      '<button type="button" data-action="period" data-value="' + k + '" aria-pressed="' + (state.period === +k) + '">' + PERIODS[k].short + '</button>').join('') + '</div>';
+
+    const hero = '<section class="card hero"><div class="hero-l"><span class="label">Indemnisations obtenues</span><span class="value">' + E0.format(t.approvedAmount) + '</span>' +
+      '<p class="text"><b>' + plural(t.incidentCount, 'colis') + '</b> en anomalie sur ' + P.label + ', dont ' + plural(t.approvedCount, 'remboursé') + '.</p></div>' +
+      '<div class="hero-r"><div class="ch-h"><h2>Cumul des remboursements</h2><button type="button" class="link" data-action="chart-table">' + (state.chartTable ? 'Voir le graphique' : 'Voir en tableau') + '</button></div>' + chartHtml(d) + '</div></section>';
+
+    const resolved = t.approvedCount + t.rejectedCount;
+    const cell = (l, v, h) => '<div class="cell"><span class="label">' + l + '</span><span class="value">' + v + '</span><span class="hint">' + h + '</span></div>';
+    const stats = '<div class="stats">' +
+      cell('Versé à votre entreprise', E0.format(t.netPaid), 'Après commission de ' + E2.format(t.commission)) +
+      cell('En attente de réponse', E0.format(t.pendingAmount), plural(t.pendingCount, 'réclamation') + ' en cours') +
+      cell('Taux d’acceptation', t.acceptanceRate == null ? '—' : Math.round(t.acceptanceRate * 100) + ' %', plural(resolved, 'réclamation') + ' traitée' + (resolved > 1 ? 's' : '')) +
+      cell('Délai de réponse', t.averageResponseDays == null ? '—' : String(t.averageResponseDays).replace('.', ',') + ' jours', 'Moyenne après envoi') + '</div>';
+
+    const recent = '<section class="card list claims"><div class="card-h"><h2>Dernières réclamations</h2><a class="link" href="#claims">Tout voir</a></div>' +
+      (state.recent.items.length ? claimHeadRow() + state.recent.items.map(claimRow).join('') : '<div class="empty-sm">Aucune réclamation pour le moment.</div>') + '</section>';
+
+    return head('Vue d’ensemble', seg) + hero + stats + '<div class="split">' + todoCard() + carriersCard(d) + '</div>' + recent;
+  }
+
+  function bindChart() {
+    const plot = $('plot'); if (!plot || !chart) return;
+    const hv = $('hv'), tip = $('tip');
+    function move(e) {
+      const r = plot.getBoundingClientRect();
+      const n = chart.cum.length;
+      const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      const i = Math.round(f * (n - 1));
+      const x = n > 1 ? i / (n - 1) * 100 : 100, y = 100 - chart.cum[i] / chart.top * 100;
+      hv.hidden = false; tip.hidden = false;
+      hv.style.left = x + '%'; hv.querySelector('.hd').style.top = y + '%';
+      tip.textContent = '';
+      const v = document.createElement('b'); v.textContent = E0.format(chart.cum[i]);
+      const dt = document.createElement('span'); dt.textContent = fmtDay(ymdDate(chart.dates[i]));
+      tip.appendChild(v); tip.appendChild(dt);
+      tip.style.left = x + '%'; tip.classList.toggle('r', x > 55);
+    }
+    plot.addEventListener('pointermove', move);
+    plot.addEventListener('pointerdown', move);
+    plot.addEventListener('pointerleave', () => { hv.hidden = true; tip.hidden = true; });
+  }
+
+  /* ---------- Claims ---------- */
+  function claimHeadRow() { return '<div class="row head" aria-hidden="true"><span>Colis</span><span>Destinataire</span><span class="c-amt">Montant</span><span>Statut</span><span class="c-date">Détectée</span></div>'; }
+  function claimRow(c) {
+    return '<button type="button" class="row" data-action="open-claim" data-id="' + c.id + '">' +
+      '<span class="c-main"><span class="trk">' + esc(c.shipment.trackingNumber) + '</span><span class="sub">' + CARRIERS[c.shipment.carrier] + ' · ' + TYPE[c.type] + '</span></span>' +
+      '<span class="c-who">' + esc(c.shipment.customerName) + '<span class="sub">' + esc(c.shipment.city) + '</span></span>' +
+      '<span class="c-amt">' + E2.format(c.amount) + '</span><span class="c-st">' + st(CLAIM_ST, c.status) + '</span><span class="c-date">' + fmtDay(D(c.detectedAt)) + '</span></button>';
+  }
+  function claimListHtml() {
+    const b = state.claims;
+    if (!b.items.length) return '<div class="card list claims"><div class="empty" style="border-top:0"><span>' + (state.claimQuery || state.claimFilter !== 'all' ? 'Aucune réclamation ne correspond à votre recherche.' : 'Aucune réclamation pour le moment. Elles apparaissent dès qu’un colis est en retard, perdu ou abîmé.') + '</span>' +
+      (state.claimQuery || state.claimFilter !== 'all' ? '<button type="button" class="btn" data-action="reset-claims">Réinitialiser les filtres</button>' : '') + '</div></div>';
+    return '<p class="count-line">' + plural(b.total, 'réclamation') + '</p><div class="card list claims">' + claimHeadRow() + b.items.map(claimRow).join('') +
+      (b.total > b.items.length ? '<div class="list-foot"><span>' + b.items.length + ' sur ' + b.total + '</span><button type="button" class="btn" data-action="more-claims">Afficher plus</button></div>' : '') + '</div>';
+  }
+  function claimsView() {
+    const F = [['all', 'Toutes'], ['pending', 'À envoyer'], ['submitted', 'Envoyées'], ['approved', 'Remboursées'], ['rejected', 'Refusées']];
+    const tabs = F.map((f) => '<button type="button" class="tab" data-action="filter-claims" data-value="' + f[0] + '" aria-pressed="' + (state.claimFilter === f[0]) + '">' + f[1] + '<span class="count">' + state.claims.counts[f[0]] + '</span></button>').join('');
+    return head('Réclamations') + '<div class="stack"><div class="tabs" role="group" aria-label="Filtrer par statut">' + tabs + '</div>' +
+      '<div class="toolbar"><div class="field">' + icon('search') + '<input class="input" id="claimSearch" type="search" placeholder="Rechercher un suivi, un client, une ville" aria-label="Rechercher une réclamation" value="' + esc(state.claimQuery) + '"></div></div>' +
+      '<div id="claimList" class="stack">' + claimListHtml() + '</div></div>';
+  }
+
+  /* ---------- Shipments ---------- */
+  function shipRow(s) {
+    const inner = '<span class="c-main"><span class="trk">' + esc(s.trackingNumber) + '</span><span class="sub">' + CARRIERS[s.carrier] + ' · ' + esc(s.store) + '</span></span>' +
+      '<span class="c-who">' + esc(s.customerName) + '<span class="sub">' + esc(s.city) + '</span></span>' +
+      '<span class="c-date">' + fmtDay(D(s.shippedAt)) + '</span>' +
+      '<span class="c-st">' + st(SHIP_ST, s.status) + (s.claim ? '<span class="sub">Réclamation ' + esc(s.claim.ref) + '</span>' : '') + '</span>';
+    return s.claim ? '<button type="button" class="row" data-action="open-claim" data-id="' + s.claim.id + '">' + inner + '</button>' : '<div class="row">' + inner + '</div>';
+  }
+  function shipListHtml() {
+    const b = state.ships;
+    if (!b.items.length) return '<div class="card list ships"><div class="empty" style="border-top:0"><span>' + (state.shipQuery || state.shipFilter !== 'all' || state.shipCarrier !== 'all' ? 'Aucun colis ne correspond à votre recherche.' : 'Aucun colis pour le moment. Ils apparaissent dès que votre boutique est synchronisée.') + '</span></div></div>';
+    return '<p class="count-line">' + plural(b.total, 'colis') + '</p><div class="card list ships"><div class="row head" aria-hidden="true"><span>Colis</span><span>Destinataire</span><span class="c-date">Expédié</span><span>Statut</span></div>' + b.items.map(shipRow).join('') +
+      (b.total > b.items.length ? '<div class="list-foot"><span>' + b.items.length + ' sur ' + b.total + '</span><button type="button" class="btn" data-action="more-ships">Afficher plus</button></div>' : '') + '</div>';
+  }
+  function shipmentsView() {
+    const F = [['all', 'Tous'], ['in_transit', 'En transit'], ['delivered', 'Livrés'], ['issues', 'Anomalies']];
+    const tabs = F.map((f) => '<button type="button" class="tab" data-action="filter-ships" data-value="' + f[0] + '" aria-pressed="' + (state.shipFilter === f[0]) + '">' + f[1] + '<span class="count">' + state.ships.counts[f[0]] + '</span></button>').join('');
+    const opts = '<option value="all">Tous les transporteurs</option>' + Object.keys(CARRIERS).map((k) => '<option value="' + k + '"' + (state.shipCarrier === k ? ' selected' : '') + '>' + CARRIERS[k] + '</option>').join('');
+    return head('Colis') + '<div class="stack"><div class="tabs" role="group" aria-label="Filtrer par état">' + tabs + '</div>' +
+      '<div class="toolbar"><div class="field">' + icon('search') + '<input class="input" id="shipSearch" type="search" placeholder="Rechercher un suivi, un client, une commande" aria-label="Rechercher un colis" value="' + esc(state.shipQuery) + '"></div>' +
+      '<select class="select" id="shipCarrier" aria-label="Transporteur">' + opts + '</select></div>' +
+      '<div id="shipList" class="stack">' + shipListHtml() + '</div></div>';
+  }
+
+  /* ---------- Stores ---------- */
+  function storesView() {
+    const list = state.stores;
+    const cards = list.map((s) => {
+      const pillCls = s.status === 'connected' ? 'good' : s.status === 'error' ? 'bad' : 'warn';
+      const pillTxt = s.status === 'connected' ? 'Connectée' : s.status === 'error' ? 'Erreur de connexion' : 'En attente de synchronisation';
+      return '<article class="card store"><div class="top"><div><h3>' + esc(s.name) + '</h3><p class="url">' + esc(s.url) + '</p></div><span class="tag">' + (isDemo(s) ? 'Exemple' : esc(s.platform)) + '</span></div>' +
+        '<div><span class="st ' + pillCls + '">' + pillTxt + '</span></div>' +
+        '<div class="stats3"><div><b>' + s.shipmentCount + '</b><span>Colis suivis</span></div><div><b>' + s.incidentCount + '</b><span>Anomalies</span></div><div><b>' + rel(D(s.lastSyncAt)) + '</b><span>Dernière synchro</span></div></div>' +
+        (isDemo(s) ? '' : '<div class="idline"><span>Identifiant pour Make :</span><code>' + esc(s.id) + '</code><button type="button" class="icon-btn sm" data-action="copy" data-value="' + esc(s.id) + '" aria-label="Copier l’identifiant">' + icon('copy') + '</button></div>') + '</article>';
+    }).join('');
+    const form = state.storeForm ? '<form class="card form" id="storeForm" novalidate><h2>Connecter une boutique</h2><div class="form-grid">' +
+      '<label for="storePlatform">Plateforme<select class="select" id="storePlatform"><option value="shopify">Shopify</option><option value="woocommerce">WooCommerce</option><option value="sendcloud">Sendcloud</option><option value="boxtal">Boxtal</option></select></label>' +
+      '<label for="storeUrl">Adresse de la boutique<input class="input" id="storeUrl" type="text" placeholder="ma-boutique.myshopify.com" autocomplete="off"></label>' +
+      '<div style="display:flex;gap:8px"><button type="submit" class="btn primary">Connecter</button><button type="button" class="btn" data-action="store-form">Annuler</button></div></div>' +
+      '<p class="form-err" id="storeErr" role="alert">' + esc(state.storeError) + '</p></form>' : '';
+    const rules = [
+      ['Colissimo', 'Retard de livraison (plus de 48 h)', 'À la livraison', 'Frais de port remboursés (avoir)'],
+      ['Colissimo', 'Perte avérée', '6 jours ouvrés sans scan', '23 € par kg'],
+      ['Mondial Relay', 'Perte en transit', '10 jours sans activité', 'Forfait de 25,00 € TTC par colis'],
+      ['Chronopost', 'Retard de livraison (plus de 24 h)', 'À la livraison', 'Transport remboursé en intégralité'],
+      ['Tous les transporteurs', 'Colis endommagé', 'Signalé sous 72 h après la livraison', 'Valeur de la marchandise sur facture']
+    ];
+    const table = '<section class="card"><div class="card-h"><h2>Ce que ParcelGuard surveille</h2></div><div class="tablewrap"><table><thead><tr><th>Transporteur</th><th>Incident</th><th>Détecté</th><th>Indemnisation</th></tr></thead><tbody>' +
+      rules.map((r) => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>').join('') + '</tbody></table></div></section>';
+    const hasDemo = list.some(isDemo);
+    const actions = '<div class="btns">' + (hasDemo ? '<button type="button" class="btn" data-action="demo-remove">Supprimer les données d’exemple</button>' : '') +
+      '<button type="button" class="btn primary" data-action="store-form">' + icon('plus') + 'Connecter une boutique</button></div>';
+    return head('Boutiques', actions) + form + (list.length ? '<div class="stores">' + cards + '</div>' : '<div class="card empty" style="border-top:1px solid var(--line)"><span>Aucune boutique connectée.</span></div>') + table;
+  }
+
+  /* ---------- Auth ---------- */
+  function authHtml() {
+    const su = state.authMode === 'signup';
+    return '<div class="auth"><div class="auth-card card"><div class="auth-brand">' + logo() + '<span>ParcelGuard</span></div>' +
+      '<h1>' + (su ? 'Créer un compte' : 'Connexion') + '</h1>' +
+      '<p class="muted">Récupérez l’argent des colis en retard, perdus ou abîmés. Aucun abonnement : 25 % uniquement sur les sommes remboursées.</p>' +
+      '<form id="authForm" novalidate>' + (su ? '<label for="authName">Nom de l’entreprise<input class="input" id="authName" type="text" autocomplete="organization"></label>' : '') +
+      '<label for="authEmail">E-mail<input class="input" id="authEmail" type="email" autocomplete="email"></label>' +
+      '<label for="authPw">Mot de passe' + (su ? ' (8 caractères minimum)' : '') + '<input class="input" id="authPw" type="password" autocomplete="' + (su ? 'new-password' : 'current-password') + '"></label>' +
+      '<p class="form-err" id="authErr" role="alert">' + esc(state.authError) + '</p>' +
+      '<button class="btn primary wide" type="submit" id="authSubmit">' + (su ? 'Créer mon compte' : 'Se connecter') + '</button></form>' +
+      '<p class="auth-alt">' + (su ? 'Déjà un compte ? <button type="button" class="link" data-action="auth-mode" data-value="login">Se connecter</button>' : 'Pas encore de compte ? <button type="button" class="link" data-action="auth-mode" data-value="signup">Créer un compte</button>') + '</p></div></div>';
+  }
+
+  /* ---------- Drawer ---------- */
+  function drawerHtml(data) {
+    const c = data.claim, car = CARRIERS[c.shipment.carrier], tl = data.timeline;
+    const items = tl.map((e, i) => '<li class="' + (i === tl.length - 1 && c.status !== 'pending' ? 'now' : '') + '"><div class="tt">' + esc(e.title) + '</div><div class="when">' + fmtDT(D(e.at)) + (e.detail ? ' · ' + esc(e.detail) : '') + '</div></li>').join('') +
+      (c.status === 'pending' ? '<li class="future"><div class="tt">Envoi automatique à ' + car + '</div><div class="when">' + (data.autoSendAt && D(data.autoSendAt) > new Date() ? fmtDT(D(data.autoSendAt)) : 'Dans les prochaines heures') + '</div></li>' : '');
+    const commission = c.status === 'approved' ? c.commission : c.status === 'rejected' ? 0 : Math.round((c.amount - c.netToMerchant) * 100) / 100;
+    const note = c.status === 'approved' ? 'Versé' : c.status === 'rejected' ? 'Aucune commission prélevée' : 'Si la réclamation est remboursée';
+    let actions;
+    if (c.status === 'pending') actions = '<button type="button" class="btn primary" data-action="send-claim" data-id="' + c.id + '">Envoyer maintenant</button><p class="note">Sans action de votre part, l’envoi se fait automatiquement.</p>';
+    else if (c.status === 'submitted') actions = '<p class="note">En attente de la réponse de ' + car + '. Vous êtes prévenu dès qu’elle arrive.</p>';
+    else if (c.status === 'rejected') actions = '<button type="button" class="btn primary" data-action="contest" data-id="' + c.id + '">Contester la décision</button><p class="note">ParcelGuard ne prélève rien sur une réclamation refusée.</p>';
+    else actions = '<p class="note">Remboursement versé le ' + fmtDay(D(c.resolvedAt)) + '.</p>';
+    return '<div class="drawer-h"><div><p class="eyebrow">Réclamation ' + esc(c.ref) + '</p><h2 class="trk-lg" id="drawerTitle">' + esc(c.shipment.trackingNumber) + '</h2></div>' +
+      '<button type="button" class="icon-btn" id="drawerClose" data-action="close-drawer" aria-label="Fermer">' + icon('x') + '</button></div>' +
+      '<div class="drawer-b"><div class="d-top">' + st(CLAIM_ST, c.status) + '<span class="muted">' + car + ' · ' + TYPE[c.type] + '</span></div>' +
+      '<p class="d-reason">' + esc(c.reason) + '</p>' +
+      '<dl class="kv"><div><dt>Destinataire</dt><dd>' + esc(c.shipment.customerName) + ', ' + esc(c.shipment.city) + '</dd></div><div><dt>Boutique</dt><dd>' + esc(c.store) + ' · commande ' + esc(c.shipment.orderNumber) + '</dd></div><div><dt>Base d’indemnisation</dt><dd>' + esc(c.compensationBasis) + '</dd></div></dl>' +
+      '<div class="money"><div><span>Montant éligible</span><span>' + E2.format(c.amount) + '</span></div>' +
+      '<div><span>Commission ParcelGuard (25 %)</span><span>' + (commission ? '−' : '') + E2.format(commission) + '</span></div>' +
+      '<div class="total"><span>Pour vous<small>' + note + '</small></span><span>' + E2.format(c.netToMerchant) + '</span></div></div>' +
+      '<div><h3>Historique</h3><ol class="tl">' + items + '</ol></div><div class="d-actions">' + actions + '</div></div>';
+  }
+  async function openDrawer(id, trigger) {
+    state.drawer = id; lastFocus = trigger || null;
+    $('scrim').hidden = false; $('drawer').hidden = false; $('drawer').scrollTop = 0;
+    $('drawer').innerHTML = '<div class="drawer-h"><p class="eyebrow">Réclamation</p><button type="button" class="icon-btn" id="drawerClose" data-action="close-drawer" aria-label="Fermer">' + icon('x') + '</button></div><div class="loading">Chargement…</div>';
+    $('drawerClose').focus();
+    await fillDrawer();
+  }
+  async function fillDrawer() {
+    const id = state.drawer; if (!id) return;
+    try {
+      const data = await api('/api/claims/' + id);
+      if (state.drawer !== id) return;
+      $('drawer').innerHTML = drawerHtml(data);
+      const b = $('drawerClose'); if (b && document.activeElement === document.body) b.focus();
+    } catch (e) { closeDrawer(); toast(e.message); }
+  }
+  function closeDrawer() {
+    if (!state.drawer) return;
+    state.drawer = null; $('scrim').hidden = true; $('drawer').hidden = true;
+    if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  }
+
+  /* ---------- Actions ---------- */
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+  function render() {
+    if (!state.booted) { $('app').innerHTML = '<div class="loading">Chargement…</div>'; return; }
+    $('app').innerHTML = state.user ? shell() : authHtml();
+    if (state.user) bindChart();
+  }
+  async function act(fn, okMsg) {
+    try {
+      await fn();
+      if (okMsg) toast(okMsg);
+      await loadView();
+      if (state.drawer) await fillDrawer();
+    } catch (e) { toast(e.message); }
+  }
+  function findClaim(id) {
+    const pools = [state.todo && state.todo.items, state.recent && state.recent.items, state.claims && state.claims.items];
+    for (const p of pools) { const c = p && p.find((x) => x.id === id); if (c) return c; }
+    return null;
+  }
+
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]'); if (!el) return;
+    const a = el.dataset.action, v = el.dataset.value, id = el.dataset.id;
+    if (a === 'period') { state.period = +v; loadView(); }
+    else if (a === 'chart-table') { state.chartTable = !state.chartTable; render(); }
+    else if (a === 'filter-claims') { state.claimFilter = v; loadView(); }
+    else if (a === 'filter-ships') { state.shipFilter = v; loadView(); }
+    else if (a === 'more-claims') loadMore('claims');
+    else if (a === 'more-ships') loadMore('ships');
+    else if (a === 'reset-claims') { state.claimFilter = 'all'; state.claimQuery = ''; loadView(); }
+    else if (a === 'open-claim') openDrawer(id, el);
+    else if (a === 'close-drawer') closeDrawer();
+    else if (a === 'send-claim') { const c = findClaim(id); act(() => api('/api/claims/' + id + '/send', { method: 'POST' }), 'Réclamation envoyée' + (c ? ' à ' + CARRIERS[c.shipment.carrier] : '')); }
+    else if (a === 'send-all') act(() => api('/api/claims/send-all', { method: 'POST' }), 'Réclamations envoyées');
+    else if (a === 'contest') act(() => api('/api/claims/' + id + '/contest', { method: 'POST' }), 'Contestation envoyée');
+    else if (a === 'retry') loadView();
+    else if (a === 'toggle-theme') { document.documentElement.setAttribute('data-theme', isDark() ? 'light' : 'dark'); render(); }
+    else if (a === 'logout') { api('/api/auth/logout', { method: 'POST' }).catch(() => {}).then(() => { closeDrawer(); state.user = null; Object.assign(state, fresh()); state.authMode = 'login'; render(); }); }
+    else if (a === 'auth-mode') { state.authMode = v; state.authError = ''; render(); }
+    else if (a === 'store-form') { state.storeForm = !state.storeForm; state.storeError = ''; render(); if (state.storeForm && $('storeUrl')) $('storeUrl').focus(); }
+    else if (a === 'demo-load') {
+      state.demoBusy = true; render();
+      api('/api/demo', { method: 'POST' }).then(() => { toast('Données d’exemple chargées'); }).catch((err) => toast(err.message)).then(() => { state.demoBusy = false; loadView(); });
+    }
+    else if (a === 'demo-remove') act(() => api('/api/demo', { method: 'DELETE' }), 'Données d’exemple supprimées');
+    else if (a === 'copy') {
+      const ok = () => toast('Identifiant copié');
+      const no = () => toast('Copie impossible : sélectionnez le texte à la main.');
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(ok, no); else no();
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'claimSearch') { state.claimQuery = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(refreshClaimList, 250); }
+    else if (e.target.id === 'shipSearch') { state.shipQuery = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(refreshShipList, 250); }
+  });
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'shipCarrier') { state.shipCarrier = e.target.value; refreshShipList(); }
+  });
+  document.addEventListener('submit', async (e) => {
+    if (e.target.id === 'authForm') {
+      e.preventDefault();
+      if (state.authBusy) return;
+      const su = state.authMode === 'signup';
+      const email = $('authEmail').value.trim(), pw = $('authPw').value, name = su ? $('authName').value.trim() : '';
+      const err = (m) => { state.authError = m; $('authErr').textContent = m; };
+      if (su && !name) return err('Indiquez le nom de votre entreprise.');
+      if (!email) return err('Indiquez votre adresse e-mail.');
+      if (!pw) return err('Indiquez votre mot de passe.');
+      if (su && pw.length < 8) return err('Le mot de passe doit contenir au moins 8 caractères.');
+      state.authBusy = true; $('authSubmit').disabled = true; err('');
+      try {
+        const r = await api(su ? '/api/auth/signup' : '/api/auth/login', { method: 'POST', body: su ? { email: email, password: pw, name: name } : { email: email, password: pw } });
+        state.user = r.user; Object.assign(state, fresh()); state.authBusy = false; loadView();
+      } catch (ex) { state.authBusy = false; $('authSubmit').disabled = false; err(ex.status === 400 ? 'Vérifiez l’adresse e-mail et le mot de passe saisis.' : ex.message); }
+    } else if (e.target.id === 'storeForm') {
+      e.preventDefault();
+      const url = $('storeUrl').value.trim();
+      if (!url) { $('storeErr').textContent = 'Saisissez l’adresse de la boutique, par exemple ma-boutique.myshopify.com.'; $('storeUrl').focus(); return; }
+      try {
+        await api('/api/stores', { method: 'POST', body: { platform: $('storePlatform').value, url: url } });
+        state.storeForm = false; state.storeError = ''; toast('Boutique ajoutée. Elle apparaît connectée dès la première synchronisation.'); loadView();
+      } catch (ex) { state.storeError = ex.message; $('storeErr').textContent = ex.message; }
+    }
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('hashchange', () => { state.view = readHash(); closeDrawer(); window.scrollTo(0, 0); if (state.user) loadView(); });
+
+  /* ---------- Start ---------- */
+  render();
+  api('/api/auth/me').then((r) => { state.user = r.user; }, () => { state.user = null; }).then(() => {
+    state.booted = true;
+    if (state.user) loadView(); else render();
+  });
+})();
+</script>
+
+</body></html>
